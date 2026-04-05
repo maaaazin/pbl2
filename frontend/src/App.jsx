@@ -1,49 +1,88 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useStore } from './store/useStore';
-import Login from './pages/Login';
-import ProjectsHome from './pages/ProjectsHome';
-import ProjectDetails from './pages/ProjectDetails';
-import ThemeToggle from './components/ThemeToggle';
+import { useEffect } from 'react'
+import { BrowserRouter, Link, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
+import { useAuthStore } from './store/useAuthStore'
+import { useThemeStore } from './store/useThemeStore'
+import ThemeToggle from './components/ThemeToggle'
+import LandingGate from './pages/LandingGate'
+import LoginPage from './pages/LoginPage'
+import ProjectsPage from './pages/ProjectsPage'
+import ProjectDetailPage from './pages/ProjectDetailPage'
+import { LogOut } from 'lucide-react'
 
-// Safe rendering check for incomplete pages
-const Placeholder = ({ name }) => (
-  <div className="p-12 text-center text-gray-500 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl">
-    {name} Page works!
-  </div>
-);
+function ProtectedLayout() {
+  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
+  const clearSession = useAuthStore((s) => s.clearSession)
 
-const queryClient = new QueryClient();
+  if (!token) {
+    return <Navigate to="/login" replace />
+  }
 
-const ProtectedRoute = ({ children }) => {
-  const isAuthenticated = useStore((state) => state.isAuthenticated);
-  return isAuthenticated ? children : <Navigate to="/" />;
-};
-
-function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <div className="min-h-screen flex flex-col font-sans transition-colors duration-300">
-          <nav className="border-b border-gray-200 dark:border-gray-800/80 bg-white/80 dark:bg-[#0b0f19]/80 backdrop-blur-md px-6 py-3.5 flex items-center justify-between sticky top-0 z-50">
-            <div className="flex items-center gap-3 cursor-pointer">
-              <div className="w-8 h-8 rounded bg-primary-600 flex items-center justify-center text-white font-bold tracking-tighter shadow-sm shadow-primary-500/20">A</div>
-              <span className="text-xl font-bold font-display tracking-tight text-gray-900 dark:text-white">AQUA</span>
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-[#0b0f19]/90">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3 md:px-8">
+          <Link to="/projects" className="flex items-center gap-3 no-underline">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-600 text-sm font-bold text-white shadow-md shadow-primary-600/25">
+              A
             </div>
+            <div>
+              <span className="font-display text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+                AQUA
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Testing workspace</p>
+            </div>
+          </Link>
+          <div className="flex items-center gap-2">
+            {user?.username ? (
+              <span className="hidden text-sm text-slate-500 sm:inline dark:text-slate-400">
+                {user.username}
+              </span>
+            ) : null}
             <ThemeToggle />
-          </nav>
-          
-          <main className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-8 animate-fade-in">
-            <Routes>
-              <Route path="/" element={<Login />} />
-              <Route path="/projects" element={<ProtectedRoute><ProjectsHome /></ProtectedRoute>} />
-              <Route path="/projects/:projectName" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
-            </Routes>
-          </main>
+            <button
+              type="button"
+              onClick={() => {
+                clearSession()
+                window.location.href = '/login'
+              }}
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
+          </div>
         </div>
-      </BrowserRouter>
-    </QueryClientProvider>
-  );
+      </header>
+      <main className="mx-auto max-w-[1400px] px-4 py-6 md:px-8 md:py-8">
+        <Outlet />
+      </main>
+    </div>
+  )
 }
 
-export default App;
+function App() {
+  const initTheme = useThemeStore((s) => s.initTheme)
+
+  useEffect(() => {
+    initTheme()
+  }, [initTheme])
+
+  return (
+    <BrowserRouter>
+      <Toaster position="top-center" toastOptions={{ className: 'dark:bg-slate-800 dark:text-white' }} />
+      <Routes>
+        <Route path="/" element={<LandingGate />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<ProtectedLayout />}>
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/projects/:projectName" element={<ProjectDetailPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
+
+export default App

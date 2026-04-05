@@ -1,52 +1,100 @@
-import { useState } from 'react';
-import toast from 'react-hot-toast';
+import { X } from 'lucide-react'
+import { useState } from 'react'
+import toast from 'react-hot-toast'
+import client from '../api/client'
 
-export default function NeedsActionModal({ projectName, data, onClose, onSuccess }) {
-  // `data.inputs` corresponds to the required_inputs array requested by LLM Playwright scripts.
-  const [formData, setFormData] = useState({});
+export default function NeedsActionModal({
+  open,
+  onClose,
+  projectName,
+  testId,
+  requiredInputs,
+  onSubmitted,
+}) {
+  const [values, setValues] = useState({})
+  const [busy, setBusy] = useState(false)
 
-  const handleChange = (name, val) => {
-    setFormData(prev => ({ ...prev, [name]: val }));
-  };
+  if (!open) return null
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    /*
-     We'd usually POST this to a backend resume endpoint. e.g.
-     axios.post(`/api/v1/resume-test/${data.testId}`, formData);
-    */
-    toast.success("Credentials saved to environment (Mocked). Resuming Test...");
-    if (onSuccess) onSuccess();
-  };
+  const fields = Array.isArray(requiredInputs) ? requiredInputs : []
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const enc = encodeURIComponent(projectName)
+      await client.post(`/api/v1/${enc}/${encodeURIComponent(testId)}/resume`, {
+        inputs: values,
+      })
+      toast.success('Inputs saved — re-running test')
+      onSubmitted?.()
+      onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not resume test')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-[#151a25] border border-gray-200 dark:border-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-slide-up">
-        <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Action Required</h2>
-          <p className="text-sm text-gray-500 mt-1">The agent needs the following information to proceed with the test script.</p>
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        aria-label="Close"
+        onClick={onClose}
+      />
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-[#141820]">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-display text-lg font-bold text-slate-900 dark:text-white">
+              Supply required data
+            </h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              The test needs credentials or other values to continue (passed to the runner as
+              environment variables).
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {data?.inputs?.map((inputDef) => (
-            <div key={inputDef.name}>
-              <label className="block text-sm font-medium mb-1.5 dark:text-gray-300">{inputDef.name}</label>
-              <input 
-                required 
-                type={inputDef.name.toLowerCase().includes('password') ? 'password' : 'text'}
-                placeholder={inputDef.hint || ''} 
-                onChange={e => handleChange(inputDef.name, e.target.value)}
-                className="w-full px-4 py-2.5 rounded-lg bg-gray-50 dark:bg-[#0b0f19] border border-gray-200 dark:border-gray-700 outline-none  text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500/50" 
-              />
-            </div>
-          ))}
-          
-          <div className="pt-4 flex gap-3">
-             <button type="button" onClick={onClose} className="btn-secondary w-full">Cancel</button>
-             <button type="submit" className="btn-primary w-full">Submit & Resume</button>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {fields.length === 0 ? (
+            <p className="text-sm text-slate-500">No fields specified — add key/value pairs.</p>
+          ) : (
+            fields.map((f) => (
+              <label key={f.name} className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  {f.name}
+                </span>
+                {f.hint ? (
+                  <p className="mb-1 text-xs text-slate-400 dark:text-slate-500">{f.hint}</p>
+                ) : null}
+                <input
+                  type="text"
+                  autoComplete="off"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-primary-500/30 focus:ring-2 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                  value={values[f.name] ?? ''}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                />
+              </label>
+            ))
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" disabled={busy} className="btn-primary">
+              {busy ? 'Submitting…' : 'Submit & re-run'}
+            </button>
           </div>
         </form>
       </div>
     </div>
-  );
+  )
 }

@@ -1,16 +1,18 @@
-import { Moon, Sun } from 'lucide-react';
-import { useStore } from '../store/useStore';
+import { Moon, Sun } from 'lucide-react'
+import { useThemeStore } from '../store/useThemeStore'
 
 export default function ThemeToggle() {
-  const { theme, toggleTheme } = useStore();
-  
+  const mode = useThemeStore((s) => s.mode)
+  const toggle = useThemeStore((s) => s.toggle)
+
   return (
-    <button 
-      onClick={toggleTheme} 
-      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-gray-600 dark:text-gray-400 focus:outline-none"
-      aria-label="Toggle Theme"
+    <button
+      type="button"
+      onClick={toggle}
+      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+      aria-label="Toggle theme"
     >
-      {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+      {mode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
     </button>
-  );
+  )
 }
