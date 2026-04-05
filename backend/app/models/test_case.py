@@ -34,4 +34,3 @@ class TestCaseInDB(TestCaseCreate):
     model_config = {
         "populate_by_name": True,
     }
-

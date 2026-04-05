@@ -3,27 +3,37 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.core.llm import get_llm_client
-from app.db.repositories.project_repo import ProjectRepository
-from app.db.repositories.test_case_repo import TestCaseRepository
-from app.models.test_case import TestCaseCreate, TestStep, TestCaseInDB
+from loguru import logger
+
+from app.core.browser.dom_parser import build_dom_context_string, extract_interactive_elements
 
 # New imports for context-aware generation
 from app.core.browser.playwright_controller import fetch_page_html
-from app.core.browser.dom_parser import extract_interactive_elements, build_dom_context_string
+from app.core.llm import get_llm_client
 from app.core.rag.knowledge_manager import KnowledgeManager
-from loguru import logger
+from app.db.repositories.project_repo import ProjectRepository
+from app.db.repositories.test_case_repo import TestCaseRepository
+from app.models.test_case import TestCaseCreate, TestCaseInDB, TestStep
+
+GENERATION_PROFILES: dict[str, tuple[int, int]] = {
+    "quick": (5, 5),
+    "standard": (10, 15),
+    "detailed": (20, 28),
+}
 
 PROMPT_TEMPLATE = """
 You are an expert QA automation engineer. Analyze the following web application description and its visible DOM elements to generate comprehensive test cases.
 
 Target URL: {url}
 
+### Additional context from the user:
+{user_context}
+
 ### Available UI Elements on the Page:
 {dom_context}
 
 ## Your Task
-Generate 5 high‑quality test cases that would be appropriate for this page, ONLY using the elements provided above. DO NOT guess element IDs or classes that are not listed above. Include:
+Generate between {count_min} and {count_max} high‑quality test cases that would be appropriate for this page, ONLY using the elements provided above. DO NOT guess element IDs or classes that are not listed above. Include:
 1. Happy path tests (things that should work normally)
 2. Edge cases (boundary conditions, unusual inputs)
 3. Negative tests (error handling, validation failures)
@@ -45,6 +55,9 @@ async def generate_test_cases_for_url(
     url: str,
     *,
     project_name: str | None = None,
+    owner_id: str | None = None,
+    generation_profile: str = "quick",
+    user_prompt: str | None = None,
 ) -> list[TestCaseInDB]:
     """
     Use the configured LLM to generate test cases for a URL
@@ -54,7 +67,7 @@ async def generate_test_cases_for_url(
     html = await fetch_page_html(url)
     elements = extract_interactive_elements(html)
     dom_context = build_dom_context_string(elements)
-    
+
     # 2. Ingest into RAG for playwright generator to use later
     km = KnowledgeManager()
     if elements:
@@ -66,12 +79,29 @@ async def generate_test_cases_for_url(
 
     if not project_name:
         raise ValueError("project_name is required to generate test cases.")
+    if not owner_id:
+        raise ValueError("owner_id is required to generate test cases.")
+
+    profile = generation_profile if generation_profile in GENERATION_PROFILES else "quick"
+    count_min, count_max = GENERATION_PROFILES[profile]
 
     project_repo = ProjectRepository()
-    project = await project_repo.get_or_create_by_name(project_name, url=url)
+    project = await project_repo.get_or_create_for_owner(
+        project_name,
+        owner_id,
+        url=url,
+    )
     project_id = project.id
 
-    prompt = PROMPT_TEMPLATE.format(url=url, dom_context=dom_context)
+    user_context = (user_prompt or "").strip() or "(none)"
+
+    prompt = PROMPT_TEMPLATE.format(
+        url=url,
+        user_context=user_context,
+        dom_context=dom_context,
+        count_min=count_min,
+        count_max=count_max,
+    )
     messages = [
         {
             "role": "system",
@@ -150,7 +180,6 @@ async def generate_test_cases_for_url(
         )
         test_case_creates.append(tc)
 
-    repo = TestCaseRepository(project_name=project.name)
+    repo = TestCaseRepository(project_id)
     created = await repo.create_many(test_case_creates, project_id=project_id)
     return created
-

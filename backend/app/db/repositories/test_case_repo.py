@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from datetime import datetime
 from typing import Any
 
@@ -10,13 +11,19 @@ from app.models.common import to_object_id
 from app.models.test_case import TestCaseCreate, TestCaseInDB
 
 
+def _collection_name_for_project(project_id: str) -> str:
+    safe = "".join(c if c.isalnum() else "_" for c in project_id)
+    return f"test_cases_{safe}"
+
+
 class TestCaseRepository:
-    def __init__(self, project_name: str):
-        if not project_name:
-            raise ValueError("project_name is required to resolve test cases collection")
-        # Removing spaces/weird chars might be a good idea for collection names, but we'll stick to a simple format.
-        safe_name = "".join([c if c.isalnum() else "_" for c in project_name])
-        self.collection_name = f"test_cases_{safe_name}"
+    """Test cases are stored per Mongo project id to avoid cross-user collisions."""
+
+    def __init__(self, project_id: str):
+        if not project_id:
+            raise ValueError("project_id is required")
+        self.project_id = project_id
+        self.collection_name = _collection_name_for_project(project_id)
 
     @property
     def collection(self):
@@ -33,8 +40,8 @@ class TestCaseRepository:
     ) -> TestCaseInDB:
         now = datetime.utcnow()
         doc: dict[str, Any] = test_case.model_dump()
-        if project_id is not None:
-            doc["project_id"] = to_object_id(project_id)
+        pid = project_id if project_id is not None else self.project_id
+        doc["project_id"] = to_object_id(pid)
         doc["created_at"] = now
         doc["updated_at"] = now
         doc["status"] = "draft"
@@ -53,11 +60,12 @@ class TestCaseRepository:
         if not test_cases:
             return []
         now = datetime.utcnow()
+        pid = project_id if project_id is not None else self.project_id
+        oid = to_object_id(pid)
         docs: list[dict[str, Any]] = []
         for tc in test_cases:
             doc: dict[str, Any] = tc.model_dump()
-            if project_id is not None:
-                doc["project_id"] = to_object_id(project_id)
+            doc["project_id"] = oid
             doc["created_at"] = now
             doc["updated_at"] = now
             doc["status"] = "draft"
@@ -75,12 +83,12 @@ class TestCaseRepository:
         *,
         project_id: str | ObjectId | None = None,
         url: str | None = None,
-        limit: int = 100,
+        limit: int = 500,
         skip: int = 0,
     ) -> list[TestCaseInDB]:
         query: dict[str, Any] = {}
-        if project_id is not None:
-            query["project_id"] = to_object_id(project_id)
+        pid = project_id if project_id is not None else self.project_id
+        query["project_id"] = to_object_id(pid)
         if url is not None:
             query["url"] = url
 
@@ -88,13 +96,13 @@ class TestCaseRepository:
             self.collection.find(query)
             .sort("created_at", -1)
             .skip(max(skip, 0))
-            .limit(min(max(limit, 1), 500))
+            .limit(min(max(limit, 1), 1000))
         )
         docs = await cursor.to_list(length=None)
         for doc in docs:
             if "_id" in doc and isinstance(doc["_id"], ObjectId):
                 doc["_id"] = str(doc["_id"])
-            if "project_id" in doc and isinstance(doc["project_id"], ObjectId):
+            if "project_id" in doc and isinstance(doc.get("project_id"), ObjectId):
                 doc["project_id"] = str(doc["project_id"])
         return [TestCaseInDB.model_validate(doc) for doc in docs]
 
@@ -114,23 +122,13 @@ class TestCaseRepository:
         project_id: str | ObjectId,
         test_id: str,
     ) -> TestCaseInDB | None:
-        """
-        Fetch a single test case for a project.
-
-        test_id can be:
-        - MongoDB _id (ObjectId hex string)
-        - logical id stored at metadata.test_id (e.g. "TC001")
-        """
         pid = to_object_id(project_id)
 
         query: dict[str, Any] = {"project_id": pid}
         ors: list[dict[str, Any]] = [{"metadata.test_id": test_id}]
 
-        # Attempt ObjectId lookup if it looks like one
-        try:
+        with contextlib.suppress(Exception):
             ors.append({"_id": to_object_id(test_id)})
-        except Exception:
-            pass
 
         query["$or"] = ors
         doc = await self.collection.find_one(query)
@@ -161,3 +159,24 @@ class TestCaseRepository:
             },
         )
 
+    async def merge_supplied_inputs(
+        self,
+        test_case_id: str | ObjectId,
+        inputs: dict[str, str],
+    ) -> None:
+        doc = await self.collection.find_one({"_id": to_object_id(test_case_id)})
+        if not doc:
+            return
+        meta = doc.get("metadata") or {}
+        if not isinstance(meta, dict):
+            meta = {}
+        prev = meta.get("supplied_inputs") or {}
+        if not isinstance(prev, dict):
+            prev = {}
+        merged = {**{str(k): str(v) for k, v in prev.items()}, **inputs}
+        meta["supplied_inputs"] = merged
+        now = datetime.utcnow()
+        await self.collection.update_one(
+            {"_id": to_object_id(test_case_id)},
+            {"$set": {"metadata": meta, "updated_at": now}},
+        )

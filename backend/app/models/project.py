@@ -11,6 +11,7 @@ class ProjectBase(BaseModel):
     url: str | None = None
     description: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    owner_id: str | None = None
 
 
 class ProjectCreate(ProjectBase):
@@ -25,4 +26,3 @@ class ProjectInDB(ProjectBase):
     model_config = {
         "populate_by_name": True,
     }
-

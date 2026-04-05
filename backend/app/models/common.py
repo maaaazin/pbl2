@@ -18,5 +18,3 @@ def to_object_id(value: str | ObjectId | None) -> ObjectId | None:
     if isinstance(value, str) and ObjectId.is_valid(value):
         return ObjectId(value)
     raise ValueError("Invalid ObjectId value")
-
-

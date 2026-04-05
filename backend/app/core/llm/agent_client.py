@@ -13,4 +13,3 @@ def get_agent_llm_client() -> OpenAICompatClient:
     """
     base_url = (settings.AGENT_LMSTUDIO_URL or settings.LMSTUDIO_URL).rstrip("/")
     return OpenAICompatClient(base_url=base_url)
-

@@ -19,4 +19,10 @@ ENV/
 
 # Runtime / generated artifacts
 playwright_scripts/
+playwright_artifacts/
 data/
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/

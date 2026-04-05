@@ -14,7 +14,6 @@ from langchain_openai import ChatOpenAI
 from app.config import settings
 from app.core.rag.knowledge_manager import KnowledgeManager
 
-
 SYSTEM_PROMPT = """You are an agentic Playwright test generator. You output only runnable Python code, no markdown, no explanation.
 
 Requirements for the script:
@@ -69,12 +68,16 @@ def build_user_prompt(
     expected_result: str,
     rag_context: str = "",
 ) -> str:
-    steps_block = "\n".join(f"  {i+1}. {s}" for i, s in enumerate(steps))
-    
-    context_block = f"""
+    steps_block = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(steps))
+
+    context_block = (
+        f"""
 Here are some relevant UI elements from the page that might help you write accurate selectors for the steps above:
 {rag_context}
-""" if rag_context else ""
+"""
+        if rag_context
+        else ""
+    )
 
     return f"""Generate a single Playwright (sync_api) Python script for this test case.
 
@@ -100,12 +103,12 @@ async def generate_playwright_script(
 ) -> str:
     """Generate a runnable Playwright Python script from test case fields using LLM."""
     steps_str = [_step_text(s) for s in steps]
-    
+
     # Retrieve relevant UI context from RAG
     km = KnowledgeManager()
     query = " ".join(steps_str)
     rag_context = km.retrieve_elements_for_steps(url, query, k=10)
-    
+
     user_content = build_user_prompt(
         test_name=test_name,
         url=url,
@@ -248,7 +251,9 @@ def generate_playwright_script_deterministic(
     lines.append("            dom_before = page.content()")
     lines.append("            dom_hash_before = _sha256(dom_before)")
     lines.append("            if artifact_dir:")
-    lines.append("                with open(os.path.join(artifact_dir, 'dom_before.html'), 'w', encoding='utf-8') as f:")
+    lines.append(
+        "                with open(os.path.join(artifact_dir, 'dom_before.html'), 'w', encoding='utf-8') as f:"
+    )
     lines.append("                    f.write(dom_before)")
     lines.append("")
 
@@ -276,19 +281,27 @@ def generate_playwright_script_deterministic(
             aselector = assertion.get("selector") or selector
             atext = assertion.get("text") or assertion.get("value")
             if aselector and atype in ("visible", "is_visible"):
-                lines.append(f"            expect({_selector_expr(str(aselector))}).to_be_visible()")
+                lines.append(
+                    f"            expect({_selector_expr(str(aselector))}).to_be_visible()"
+                )
                 continue
             if atype in ("text_contains", "contains") and atext is not None:
                 if aselector:
-                    lines.append(f"            expect({_selector_expr(str(aselector))}).to_contain_text({_escape_py_string(str(atext))})")
+                    lines.append(
+                        f"            expect({_selector_expr(str(aselector))}).to_contain_text({_escape_py_string(str(atext))})"
+                    )
                 else:
-                    lines.append(f"            expect(page).to_have_text({_escape_py_string(str(atext))})")
+                    lines.append(
+                        f"            expect(page).to_have_text({_escape_py_string(str(atext))})"
+                    )
                 continue
 
         if action_l in ("assert_text", "assert_text_contains"):
             if selector is None or value is None:
                 continue
-            lines.append(f"            expect({_selector_expr(str(selector))}).to_contain_text({_escape_py_string(str(value))})")
+            lines.append(
+                f"            expect({_selector_expr(str(selector))}).to_contain_text({_escape_py_string(str(value))})"
+            )
             continue
         if action_l in ("assert_visible",):
             if selector is None:
@@ -305,13 +318,17 @@ def generate_playwright_script_deterministic(
             if selector is None:
                 continue
             val = "" if value is None else str(value)
-            lines.append(f"            {_selector_expr(str(selector))}.fill({_escape_py_string(val)})")
+            lines.append(
+                f"            {_selector_expr(str(selector))}.fill({_escape_py_string(val)})"
+            )
             continue
         if action_l in ("press",):
             if selector is None:
                 continue
             key = "Enter" if value is None else str(value)
-            lines.append(f"            {_selector_expr(str(selector))}.press({_escape_py_string(key)})")
+            lines.append(
+                f"            {_selector_expr(str(selector))}.press({_escape_py_string(key)})"
+            )
             continue
         if action_l in ("check", "uncheck"):
             if selector is None:
@@ -323,11 +340,15 @@ def generate_playwright_script_deterministic(
             if selector is None:
                 continue
             val = "" if value is None else str(value)
-            lines.append(f"            {_selector_expr(str(selector))}.select_option({_escape_py_string(val)})")
+            lines.append(
+                f"            {_selector_expr(str(selector))}.select_option({_escape_py_string(val)})"
+            )
             continue
         if action_l in ("wait_for", "wait_for_selector"):
             if selector is not None:
-                lines.append(f"            page.wait_for_selector({_escape_py_string(str(selector))}, timeout=10000)")
+                lines.append(
+                    f"            page.wait_for_selector({_escape_py_string(str(selector))}, timeout=10000)"
+                )
             continue
 
         # Unknown actions: ignore deterministically (LLM should be used for better mapping)
@@ -336,21 +357,27 @@ def generate_playwright_script_deterministic(
     # Add a lightweight expected_result check if it's not empty.
     exp = (expected_result or "").strip()
     if exp:
-        lines.append(f"            # Expected result fallback check")
-        lines.append(f"            expect(page.locator('body')).to_contain_text({_escape_py_string(exp)})")
+        lines.append("            # Expected result fallback check")
+        lines.append(
+            f"            expect(page.locator('body')).to_contain_text({_escape_py_string(exp)})"
+        )
 
     lines.append("")
     lines.append("            dom_after = page.content()")
     lines.append("            dom_hash_after = _sha256(dom_after)")
     lines.append("            if artifact_dir:")
-    lines.append("                with open(os.path.join(artifact_dir, 'dom_after.html'), 'w', encoding='utf-8') as f:")
+    lines.append(
+        "                with open(os.path.join(artifact_dir, 'dom_after.html'), 'w', encoding='utf-8') as f:"
+    )
     lines.append("                    f.write(dom_after)")
     lines.append("                try:")
-    lines.append("                    page.screenshot(path=os.path.join(artifact_dir, 'screenshot.png'), full_page=True)")
+    lines.append(
+        "                    page.screenshot(path=os.path.join(artifact_dir, 'screenshot.png'), full_page=True)"
+    )
     lines.append("                except Exception:")
     lines.append("                    pass")
     lines.append("            _emit_artifact({")
-    lines.append(f"                'test_name': { _escape_py_string(test_name) },")
+    lines.append(f"                'test_name': {_escape_py_string(test_name)},")
     lines.append("                'dom_hash_before': dom_hash_before,")
     lines.append("                'dom_hash_after': dom_hash_after,")
     lines.append("                'dom_changed': dom_hash_before != dom_hash_after,")
@@ -365,7 +392,7 @@ def generate_playwright_script_deterministic(
     lines.append("            except Exception:")
     lines.append("                pass")
     lines.append("            payload = {")
-    lines.append(f"                'test_name': { _escape_py_string(test_name) },")
+    lines.append(f"                'test_name': {_escape_py_string(test_name)},")
     lines.append("                'dom_hash_before': dom_hash_before,")
     lines.append("                'dom_hash_after': dom_hash_after,")
     lines.append("                'dom_changed': None,")

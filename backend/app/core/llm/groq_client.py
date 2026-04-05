@@ -11,4 +11,3 @@ def get_groq_client() -> OpenAICompatClient:
         base_url="https://api.groq.com/openai",
         api_key=settings.GROQ_API_KEY,
     )
-

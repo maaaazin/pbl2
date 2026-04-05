@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import httpx
 
@@ -72,10 +73,5 @@ class OpenAICompatClient:
                 ) from None
             data = r.json()
 
-        text = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-        )
+        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
         return LLMResult(text=text or "", raw=data)
-

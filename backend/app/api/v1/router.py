@@ -1,14 +1,23 @@
 from fastapi import APIRouter
 
-from app.api.v1 import agent
-from app.api.v1 import test_generation
-from app.api.v1 import test_execution
-from app.api.v1 import test_run
-from app.api.v1 import test_cases
-from app.api.v1 import projects
-from app.api.v1 import llm
+from app.api.v1 import (
+    agent,
+    auth,
+    llm,
+    projects,
+    test_cases,
+    test_execution,
+    test_generation,
+    test_run,
+)
 
 router = APIRouter()
+
+router.include_router(
+    auth.router,
+    prefix="/auth",
+    tags=["Auth"],
+)
 
 router.include_router(
     test_generation.router,

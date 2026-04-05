@@ -4,15 +4,14 @@ Execute a generated Playwright Python script in a subprocess and return pass/fai
 
 from __future__ import annotations
 
+# Run subprocess in thread to avoid blocking event loop
+import asyncio
 import json
 import os
 import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
-
-# Run subprocess in thread to avoid blocking event loop
-import asyncio
 
 from app.config import settings
 
@@ -22,6 +21,7 @@ async def run_playwright_script(
     *,
     timeout_seconds: float = 60.0,
     artifact_subdir: str | None = None,
+    extra_env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """
     Write script to a temp file, run it with `python script.py`, capture result.
@@ -61,6 +61,10 @@ async def run_playwright_script(
         artifact_dir = os.path.join(base_dir, run_id)
         env = dict(os.environ)
         env["ARTIFACT_DIR"] = artifact_dir
+        if extra_env:
+            for k, v in extra_env.items():
+                if k and v is not None:
+                    env[str(k)] = str(v)
 
         proc = await asyncio.create_subprocess_exec(
             "python",
@@ -74,7 +78,7 @@ async def run_playwright_script(
                 proc.communicate(),
                 timeout=timeout_seconds,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.wait()
             return {

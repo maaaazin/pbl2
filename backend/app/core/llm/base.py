@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol, Sequence
+from typing import Any, Protocol
 
 from app.core.llm.types import ChatMessage
 
@@ -26,4 +27,3 @@ class BaseLLMClient(Protocol):
         max_tokens: int | None = None,
         response_format: dict[str, Any] | None = None,
     ) -> LLMResult: ...
-

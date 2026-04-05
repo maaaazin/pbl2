@@ -31,7 +31,37 @@ dependencies = [
     "loguru>=0.7.2",
     "httpx>=0.26.0",
     "python-multipart>=0.0.6",
+    "pyjwt[crypto]>=2.8.0",
+    "bcrypt>=4.0.0",
     # Testing
     "pytest>=7.4.0",
     "pytest-asyncio>=0.23.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["app"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+    "B008",  # FastAPI Depends() in defaults
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/models/common.py" = ["E402"] # Docstring before imports (module doc)
+"scripts/*.py" = ["E402"] # sys.path bootstrap before app imports
+"app/services/playwright_generator.py" = ["E501", "SIM108"] # Long LLM prompt strings
+"app/services/test_generation_service.py" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.format]
+quote-style = "double"

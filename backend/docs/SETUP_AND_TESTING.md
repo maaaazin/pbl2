@@ -38,8 +38,8 @@ LM Studio selects the model by the request **model** parameter. Use one URL; set
 
 ```bash
 cd backend
-# If using venv: source .venv/bin/activate
-uvicorn app.main:app --reload
+uv sync
+uv run uvicorn app.main:app --reload
 ```
 
 ### 2. Install Playwright browser (once)
@@ -92,6 +92,16 @@ curl -X POST http://localhost:8000/api/v1/agent/run-once \
 ```
 
 Uses **Phi** to decide whether to generate tests; test generation itself still uses **Llama** when the agent chooses “generate_tests”.
+
+## Inspect RAG (Chroma)
+
+From `backend/`:
+
+```bash
+uv run python scripts/view_rag.py
+```
+
+Uses the same persistence path as the API (`CHROMA_PATH` in settings, default `data/chroma_db`).
 
 ## Quick checklist
 

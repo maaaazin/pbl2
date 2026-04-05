@@ -9,7 +9,6 @@ from app.db.repositories.project_repo import ProjectRepository
 from app.db.repositories.test_case_repo import TestCaseRepository
 from app.services.test_generation_service import generate_test_cases_for_url
 
-
 AgentAction = Literal["generate_tests", "do_nothing", "finish"]
 
 
@@ -31,12 +30,13 @@ CRITICAL:
 """.strip()
 
 
-async def _summarize_project_state(project_name: str) -> dict[str, Any]:
+async def _summarize_project_state(project_name: str, owner_id: str) -> dict[str, Any]:
     project_repo = ProjectRepository()
-    test_case_repo = TestCaseRepository(project_name=project_name)
-
-    project = await project_repo.get_or_create_by_name(project_name)
-    tests = await test_case_repo.list(project_id=project.id) if project.id else []
+    project = await project_repo.get_or_create_for_owner(project_name, owner_id)
+    test_case_repo = TestCaseRepository(project.id) if project.id else None
+    tests = (
+        await test_case_repo.list(project_id=project.id) if project.id and test_case_repo else []
+    )
 
     categories: dict[str, int] = {}
     for tc in tests:
@@ -59,6 +59,7 @@ async def run_agent_once(
     *,
     project_name: str,
     url: str,
+    owner_id: str,
 ) -> dict[str, Any]:
     """
     Run a single decision step of the agent.
@@ -68,7 +69,7 @@ async def run_agent_once(
     """
     client = get_agent_llm_client()
 
-    state = await _summarize_project_state(project_name)
+    state = await _summarize_project_state(project_name, owner_id)
 
     user_payload = {
         "project_name": project_name,
@@ -119,6 +120,7 @@ async def run_agent_once(
         created = await generate_test_cases_for_url(
             url=url,
             project_name=project_name,
+            owner_id=owner_id,
         )
         result["effect"] = {
             "generated_test_count": len(created),
@@ -127,4 +129,3 @@ async def run_agent_once(
         result["effect"] = {"message": "No test generation performed."}
 
     return result
-
